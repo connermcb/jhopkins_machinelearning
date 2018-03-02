@@ -1,0 +1,26 @@
+---
+title: "Machine Learning Final Project"
+author: "C. McBride"
+date: "March 1, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE}
+# Load packages
+library(dplyr)
+library(readr)
+library(caret)
+library(ggplot2)
+
+```
+
+```{r echo=FALSE}
+# Load data
+d <- read_csv("")
+
+```
+
