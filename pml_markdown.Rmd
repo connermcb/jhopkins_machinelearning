@@ -9,18 +9,97 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 # Load packages
 library(dplyr)
 library(readr)
 library(caret)
 library(ggplot2)
+library(parallel)
+library(doParallel)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Load training data
+d <- read.csv("pml-training.csv")
+
+# Change variables to class numeric
+d[, 8:159] <- apply(d[, 8:159], 2, function(x) as.numeric(x))
+
+# Remove variables with high proportion of NA's
+missing <- c()
+for(i in seq_along(names(d))){if(sum(is.na(d[, i])) > 0)missing <- c(missing, i)}
+d <- d[, -missing]
+
+# Make vector class adjustments
+d$classe <- as.factor(d$classe)
+
+# Pre-select relevant features
+d <- d[8:60]
+
+# Test near-zero variance and remove problematic variables
+nzv <- nearZeroVar(d, saveMetrics = T)
+d <- d[, !nzv$nzv]
+
+# Partition data into training and validation
+set.seed(1432)
+trainSplit <- createDataPartition(y=d$classe, p = 0.7, list = F) 
+trainPML <- d[trainSplit, ]
+validPML <- d[-trainSplit, ]
 
 ```
 
-```{r echo=FALSE}
-# Load data
-d <- read_csv("")
 
+```{r}
+# Set up parallel processing
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+
+```
+
+```{r}
+# Configure trainControl object
+fitControl <- trainControl(method = "repeatedcv",
+                           repeats = 5,
+                           number = 10,
+                           allowParallel = TRUE)
+
+# Training model
+dTree <- train(classe ~ ., 
+               method = 'rf', 
+               preProcess = c("pca", "scale", "knnImpute"),
+               data = trainPML,
+               trControl = fitControl)
+
+# save model
+saveRDS(dTree, "dtree_model.rds")
+```
+
+```{r}
+# predictions on validation data
+prd <- predict(dTree, newdata = validPML)
+
+# performance
+sum(prd==validPML$classe)/nrow(validPML)
+sum(prd!=validPML$classe)
+```
+
+```{r}
+# load test data
+t <- read.csv("pml-testing.csv")
+```
+
+```{r}
+# format and clean test data
+# Change variables to class numeric
+t[, 8:159] <- apply(t[, 8:159], 2, function(x) as.numeric(x))
+
+# match features in test df to train df
+t <- t[, names(trainPML)[1:52]]
+```
+
+```{r}
+# test model 
+predict(dTree, newdata = t)
 ```
 
