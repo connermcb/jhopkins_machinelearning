@@ -433,6 +433,7 @@ names(density_data) &lt;- c(&quot;Model&quot;, &quot;Accuracy&quot;, &quot;Kappa
 <h3>Performance &amp; Conclusions</h3>
 <p>The random forest algorithm was by far the best at accurately predicting movement type. Both it’s accuracy measure and kappa value were very robust. The other models lagged behind the random forest implementation in both measures.</p>
 <p>Further tuning of the algorithms or stacking might have produced better results but nonetheless the random forest model performed well enough to pass the on the test set with 19/20.</p>
+<p>Density plots of the cross-validation resampling distributions for each model’s kappa and accuracy values underscores the differences in performance and the superiority of the random forest model.</p>
 <pre class="r"><code># plot accuracy density
 ggplot(density_data) +
         geom_density(aes(x=Accuracy, 
