@@ -96,6 +96,8 @@ fitControl <- trainControl(method = "repeatedcv",
                            allowParallel = TRUE)
 ```
 
+The distribution of levels in the outcome variable show some variability but overall appear robust against the algorithms predicting one variable significantly better than others.
+
 ```{r echo=TRUE, warning=FALSE, message=FALSE}
 # check balance of among levels withing response variable
 table(trainPML$classe)/nrow(trainPML)
@@ -133,6 +135,7 @@ prd <- predict(dTree, newdata = validPML)
 # confusion matrix
 confusionMatrix(prd, validPML$classe)
 ```
+Both the accuracy and kappa values are very strong indicating that the accuracy is not at all random.
 
 A plot of the error gradients, shows the model had explained most of the variation within the data even with a relatively low number of component trees.
 
@@ -174,6 +177,8 @@ prd <- predict(gBoost, newdata = validPML)
 # confusion matrix
 confusionMatrix(prd, validPML$classe)
 ```
+
+
 
 **Naive Bayes**
 
@@ -259,7 +264,11 @@ names(density_data) <- c("Model", "Accuracy", "Kappa")
   
 * * *  
   
-### Performance
+### Performance & Conclusions
+
+The random forest algorithm was by far the best at accurately predicting movement type. Both it's accuracy measure and kappa value were very robust. The other models lagged behind the random forest implementation in both measures.
+
+Further tuning of the algorithms or stacking might have produced better results but nonetheless the random forest model performed well enough to pass the on the test set with 19/20.
 
 ```{r echo=TRUE, warning=FALSE, message=FALSE, fig.align="center"}
 # plot accuracy density
@@ -287,9 +296,6 @@ ggplot(density_data) +
 
 ```
 
-* * *
- 
-### Conclusions
 
 
 * * *
