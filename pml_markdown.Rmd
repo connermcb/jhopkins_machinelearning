@@ -19,13 +19,30 @@ library(parallel)
 library(doParallel)
 ```
 
-```{r echo=FALSE, warning=FALSE, message=FALSE}
+### Synopsis
+
+This project is an exploration of machine learning using the [caret package]() in R. Three algorithms from the package are harenessed for a classification task using the Weight Lifting Exercise dataset. The dataset includes accelerometer measurements for dumbell exercises performed in several incorrect ways and one correct way. The challenge is to preprocess the data then implement, tune, and optimize a classification algorithm. Three models were used that relied on regularized discriminate analysis, naive Bayes, and random forest algorithms. A few preprocessing steps were also carried out to make the models more efficient and responsive.  along with other variables that had high incidence of null values. Subsequently, principle component analysis was done, a process that included scaling.   
+
+* * *
+
+### The Dataset 
+
+The dataset consisted of 19,622 observations on 160 variables, most of which were float values correponding to the measurements take from the accelerometers. The small number of non-numeric variables were related to data collection and included factors such as subject name and time stamps. These factor type variables were dropped from the data since they did not serve as meaningful predictors of the classification variable. The classification variable (`classe`) was of factor type with five levels (capital letters A through E). 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
 # Load training data
 d <- read.csv("pml-training.csv")
 
 # Change variables to class numeric
 d[, 8:159] <- apply(d[, 8:159], 2, function(x) as.numeric(x))
 
+# summarize data
+dim(d)
+```
+
+Variables with a proportionately high number of null values were dropped from the data set since they were unlikely to contribute to the performance of the models. This left 53 numeric predictor variables in the dataset.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
 # Remove variables with high proportion of NA's
 missing <- c()
 for(i in seq_along(names(d))){if(sum(is.na(d[, i])) > 0)missing <- c(missing, i)}
@@ -36,38 +53,69 @@ d$classe <- as.factor(d$classe)
 
 # Pre-select relevant features
 d <- d[8:60]
+```
 
+Next, zero- and near-zero-variance variables were removed from the data because there variable can cause machine learning models to crash or become unstable. This step also identifies and eliminates variables with a few observations that fall outside of a narrow, near-variance. Such variables run the risk of being split unrepresentatively when dividing the data into train and validation sets.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
 # Test near-zero variance and remove problematic variables
 nzv <- nearZeroVar(d, saveMetrics = T)
 d <- d[, !nzv$nzv]
+```
 
+After the data was cleaned and some of the preprocessing steps were completed (others were included as calls to the model functions), the data was divided into training and validation subsets. The seed for the random function was set to facilitate reproducibility.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
 # Partition data into training and validation
 set.seed(1432)
 trainSplit <- createDataPartition(y=d$classe, p = 0.7, list = F) 
 trainPML <- d[trainSplit, ]
 validPML <- d[-trainSplit, ]
-
 ```
 
 
-```{r}
+```{r echo=TRUE, warning=FALSE, message=FALSE, eval=FALSE}
 # Set up parallel processing
 cluster <- makeCluster(detectCores() - 1)
 registerDoParallel(cluster)
 
 ```
 
-```{r}
+* * *
+
+### Cross-Validation
+
+For cross validation, all three models used repeated training/test splits using the k-folds method with 10 folds repeated 5 times. Parallel processing was harnessed to speed training.
+
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, eval=FALSE}
 # Configure trainControl object
 fitControl <- trainControl(method = "repeatedcv",
                            repeats = 5,
                            number = 10,
                            allowParallel = TRUE)
+```
 
-# Training model
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# check balance of among levels withing response variable
+table(trainPML$classe)/nrow(trainPML)
+table(validPML$classe)/nrow(validPML)
+```
+
+* * *
+
+### Algorithms
+
+**Random Forest**
+
+The first model used was a random forest algorithm. Although it took considerably longer to train, that some of the other options, it was by far the best performing algorithm judging by accuracy. The confusion matrix for this model over the validation set, shows low relative Type I and Type II errors, along for a very high accuracy considering the small amount of tuning that went into the implementation.
+
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, eval=FALSE}
+# Random Forest Training model
 dTree <- train(classe ~ ., 
                method = 'rf', 
-               preProcess = c("pca", "scale", "knnImpute"),
+               preProcess = c("pca", "scale"),
                data = trainPML,
                trControl = fitControl)
 
@@ -75,21 +123,187 @@ dTree <- train(classe ~ .,
 saveRDS(dTree, "dtree_model.rds")
 ```
 
-```{r}
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# load model
+dTree <- readRDS("dtree_model.rds")
+
 # predictions on validation data
 prd <- predict(dTree, newdata = validPML)
 
-# performance
-sum(prd==validPML$classe)/nrow(validPML)
-sum(prd!=validPML$classe)
+# confusion matrix
+confusionMatrix(prd, validPML$classe)
 ```
 
-```{r}
+A plot of the error gradients, shows the model had explained most of the variation within the data even with a relatively low number of component trees.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, fig.align="center"}
+# plot of erro gradients
+plot(dTree$finalModel)
+```
+
+**Gradient Boosted Regression Model**
+
+The next model that was investigated was the gradient boosted regression model. While the results of the model were still statistically significant, the overall all predictive power of this model fell far short of the random forest analogue.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, eval=FALSE}
+# Gradient Boost Training model
+gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
+                        n.trees = (1:30)*50, 
+                        shrinkage = 0.1,
+                        n.minobsinnode = 20)
+
+gBoost <- train(classe ~ ., 
+                method ="gbm",
+                preProcess = c("pca", "scale"),
+                data = trainPML,
+                trControl = fitControl,
+                verbose = FALSE,
+                tuneGrid = gbmGrid)
+
+# save model
+saveRDS(gBoost, "gboost_model.rds")
+```
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# load model
+gBoost <- readRDS("gboost_model.rds")
+
+# predictions on validation data
+prd <- predict(gBoost, newdata = validPML)
+
+# confusion matrix
+confusionMatrix(prd, validPML$classe)
+```
+
+**Naive Bayes**
+
+The next model that was attempted as a classifier for this dataset relied on a naive Bayes algorithm. 
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, eval=FALSE}
+# train naive Bayes model
+naiveBayes <- train(classe ~ ., 
+                   method ="naive_bayes",
+                   preProcess = c("pca", "scale"),
+                   data = trainPML,
+                   trControl = fitControl)
+
+# save model
+saveRDS(naiveBayes, "naive_bayes_model.rds")
+```
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# load model
+naiveBayes <- readRDS("naive_bayes_model.rds")
+
+# predictions on validation data
+prd <- predict(naiveBayes, newdata = validPML)
+
+# confusion matrix
+confusionMatrix(prd, validPML$classe)
+```
+
+**Regularized Discriminant Analysis**
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, eval=FALSE}
+# regularized disriminant analysis
+rda_model <- train(classe ~ .,
+                   method = "rda",
+                   preProcess = c("pca"),
+                   data = trainPML,
+                   trControl = fitControl)
+
+# save model
+saveRDS(rda_model, "rda_model.rds")
+```
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# load model
+rda_model <- readRDS("rda_model.rds")
+
+# predictions on validation data
+prd <- predict(rda_model, newdata = validPML)
+
+# confusion matrix
+confusionMatrix(prd, validPML$classe)
+```
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+# prepare data for ovelapping density plot
+density_data <- cbind("RDA", 
+                      rda_model$resample$Accuracy, 
+                      rda_model$resample$Kappa)
+
+density_data <- rbind(density_data, 
+                      cbind("GBM", 
+                            gBoost$resample$Accuracy,
+                            gBoost$resample$Kappa))
+
+density_data <- rbind(density_data, 
+                      cbind("Naive Bayes", 
+                            naiveBayes$resample$Accuracy,
+                            naiveBayes$resample$Kappa))
+
+density_data <- rbind(density_data,
+                      cbind("Random Forest", 
+                            dTree$resample$Accuracy,
+                            dTree$resample$Kappa))
+
+density_data <- as.data.frame(density_data)
+
+density_data$V2 <- as.double(as.character(density_data$V2))
+density_data$V3 <- as.double(as.character(density_data$V3))
+
+names(density_data) <- c("Model", "Accuracy", "Kappa")
+
+```
+  
+* * *  
+  
+### Performance
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, fig.align="center"}
+# plot accuracy density
+ggplot(density_data) +
+        geom_density(aes(x=Accuracy, 
+                         group=Model, 
+                         color=Model, 
+                         fill= Model)) +
+        labs(title="Resampling Accuracy Distributions by Model") +
+        theme_bw() +
+        theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r echo=TRUE, warning=FALSE, message=FALSE, fig.align="center"}
+# plot accuracy density
+ggplot(density_data) +
+        geom_density(aes(x=Kappa, 
+                         group=Model, 
+                         color=Model, 
+                         fill= Model)) +
+        labs(title="Resampling Kappa Distributions by Model") +
+        theme_bw() +
+        theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+* * *
+ 
+### Conclusions
+
+
+* * *
+
+### Testing Code
+
+
+
+```{r echo=TRUE, eval=FALSE}
 # load test data
 t <- read.csv("pml-testing.csv")
 ```
 
-```{r}
+```{r echo=TRUE, eval=FALSE}
 # format and clean test data
 # Change variables to class numeric
 t[, 8:159] <- apply(t[, 8:159], 2, function(x) as.numeric(x))
@@ -98,8 +312,11 @@ t[, 8:159] <- apply(t[, 8:159], 2, function(x) as.numeric(x))
 t <- t[, names(trainPML)[1:52]]
 ```
 
-```{r}
-# test model 
-predict(dTree, newdata = t)
-```
+```{r echo=TRUE, eval=FALSE}
+# predictions on test set by model
+rda_predictions <- predict(rda_model, newdata = t)
+nb_predictions <- predict(naiveBayes, newdata = t)
+rf_predictions <- predict(dTree, newdata = t)
+gb_predictions <- predict(gBoost, newdata = t)
 
+```
