@@ -270,6 +270,8 @@ The random forest algorithm was by far the best at accurately predicting movemen
 
 Further tuning of the algorithms or stacking might have produced better results but nonetheless the random forest model performed well enough to pass the on the test set with 19/20.
 
+Density plots of the cross-validation resampling distributions for each model's kappa and accuracy values underscores the differences in performance and the superiority of the random forest model.
+
 ```{r echo=TRUE, warning=FALSE, message=FALSE, fig.align="center"}
 # plot accuracy density
 ggplot(density_data) +
